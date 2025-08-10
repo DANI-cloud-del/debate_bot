@@ -1,24 +1,23 @@
-# test_gpt2.py
-
-from transformers import pipeline
 import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
-def main():
-    print("🔍 Checking GPU availability...")
-    if torch.cuda.is_available():
-        print(f"✅ GPU detected: {torch.cuda.get_device_name(0)}")
-    else:
-        print("⚠️ GPU not available. Running on CPU.")
+# Optional: reduce fragmentation
+import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
-    print("\n🚀 Loading GPT-2 model...")
-    generator = pipeline("text-generation", model="gpt2")
+# Load tokenizer
+tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen1.5-0.5B")
 
-    prompt = "Explain AI in one sentence."
-    print(f"\n🧠 Prompt: {prompt}")
-    output = generator(prompt, max_length=50, do_sample=True)
+# Load model in full precision with CPU offloading
+model = AutoModelForCausalLM.from_pretrained(
+    "Qwen/Qwen1.5-0.5B",
+    device_map="auto",         # Automatically offloads to CPU if needed
+    torch_dtype=torch.float16, # Use fp16 to reduce memory footprint
+    offload_folder="offload"   # Optional folder for CPU-offloaded weights
+)
 
-    print("\n📣 Generated Text:")
-    print(output[0]["generated_text"])
-
-if __name__ == "__main__":
-    main()
+# Test generation
+prompt = "AI is the advancement of technology to create machines capable of"
+inputs = tokenizer(prompt, return_tensors="pt").to("cuda")
+outputs = model.generate(**inputs, max_new_tokens=50)
+print(tokenizer.decode(outputs[0], skip_special_tokens=True))
